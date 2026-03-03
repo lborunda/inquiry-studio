@@ -1,20 +1,10 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Inquiry Studio
 
-# Run and deploy your AI Studio app
+Inquiry Studio is an AI-supported environment designed for architectural reasoning, research methods, and thesis development. Built not as an automated writer, but as an **instrument for thinking**, it acts as an experienced research mentor to scaffold the complex process of knowledge formation.
 
-This contains everything you need to run your app locally.
+Instead of just editing text, Inquiry Studio guides students through the actual lifecycle of a thesis:
+* **Inquiry Stages:** Navigate from mapping the *Problem Space* and building a *Conceptual Model* to formal *Research Design* and *Argument Structure*.
+* **Epistemic Moves:** Break down complex roadblocks using targeted AI interventions like *Clarify Concepts*, *Surface Assumptions*, and *Stress-Test Claims*.
+* **Inquiry Mapping:** Visually map literature and logic by extracting core thesis building blocks—*Tensions, Variables, Hypotheses, and Evidence*.
 
-View your app in AI Studio: https://ai.studio/apps/82a781eb-7e74-4a32-885a-d75e6d635980
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Designed for both fundamental and applied architectural research, Inquiry Studio helps students transform raw design intuition into structured, defensible academic inquiry.
