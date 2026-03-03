@@ -1,29 +1,21 @@
-# -------------------------------
-# Inquiry Studio RAG Backend
-# Production Dockerfile
-# -------------------------------
-
-# Use lightweight Node image
-FROM node:20-alpine
-
-# Create app directory
+# ---------- Build stage ----------
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install all dependencies (including dev for build)
 COPY package*.json ./
-RUN npm install
-
-# Copy the rest of the source code
+RUN npm ci
 COPY . .
-
-# Build the application
 RUN npm run build
 
-# Cloud Run requires this environment variable
-ENV PORT=8080
+# ---------- Run stage ----------
+FROM node:20-alpine
+WORKDIR /app
 
-# Expose port
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+COPY --from=builder /app/server.js ./server.js
+COPY --from=builder /app/dist ./dist
+
 EXPOSE 8080
-
-# Start server
 CMD ["node", "server.js"]
