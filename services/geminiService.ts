@@ -137,17 +137,32 @@ Text:
 ${text.substring(0, 5000)}
 """`;
 
-  return geminiGenerate(null, [{ role: "user", parts: [{ text: prompt }] }]);
+  try {
+    return await geminiGenerate(null, [{ role: "user", parts: [{ text: prompt }] }]);
+  } catch (e) {
+    console.error(e);
+    return "I’m having trouble connecting right now. Please check the server logs and try again.";
+  }
 };
 
 export const summarizeFile = async (fileName: string): Promise<string> => {
   const prompt = `Please provide a concise, one-paragraph summary of a document titled "${fileName}". This document is part of a syllabus for an architecture research methods class. Focus on the key concepts and its relevance to a student learning academic writing.`;
-  return geminiGenerate(null, [{ role: "user", parts: [{ text: prompt }] }]);
+  try {
+    return await geminiGenerate(null, [{ role: "user", parts: [{ text: prompt }] }]);
+  } catch (e) {
+    console.error(e);
+    return "Summary unavailable.";
+  }
 };
 
 export const generateAcademicTheme = async (idea: string): Promise<string> => {
   const prompt = `An architecture student has a raw idea: "${idea}". Transform this into a concise, one-sentence academic theme or research question suitable for a thesis. The theme should be formal, clear, and hint at a potential methodology.`;
-  return geminiGenerate(null, [{ role: "user", parts: [{ text: prompt }] }]);
+  try {
+    return await geminiGenerate(null, [{ role: "user", parts: [{ text: prompt }] }]);
+  } catch (e) {
+    console.error(e);
+    return "Theme generation unavailable.";
+  }
 };
 
 export const generateTitle = async (text: string): Promise<string> => {
@@ -158,8 +173,13 @@ Text:
 ${text.substring(0, 1000)}
 """`;
 
-  const out = await geminiGenerate(null, [{ role: "user", parts: [{ text: prompt }] }]);
-  return out.replace(/["\n]/g, "").trim();
+  try {
+    const out = await geminiGenerate(null, [{ role: "user", parts: [{ text: prompt }] }]);
+    return out.replace(/["\n]/g, "").trim();
+  } catch (e) {
+    console.error(e);
+    return "Untitled";
+  }
 };
 
 export const generateOrbResponse = async (word: string, action: OrbAction, context: string): Promise<string> => {
@@ -181,7 +201,71 @@ export const generateOrbResponse = async (word: string, action: OrbAction, conte
       break;
   }
 
-  return geminiGenerate(null, [{ role: "user", parts: [{ text: prompt }] }]);
+  try {
+    return await geminiGenerate(null, [{ role: "user", parts: [{ text: prompt }] }]);
+  } catch (e) {
+    console.error(e);
+    return "I’m having trouble connecting right now. Please check the server logs and try again.";
+  }
+};
+
+export const generateResearchArgument = async (text: string): Promise<string> => {
+  const prompt = `Analyze the following text using the Toulmin model of argumentation. Break it down into:
+1. Claim (the main argument)
+2. Evidence/Data (the facts or data supporting the claim)
+3. Warrant (the underlying connection between the claim and evidence)
+4. Assumptions/Backing (the underlying beliefs that support the warrant)
+
+After the breakdown, recommend specific areas in the text where more information or evidence should be added to strengthen the argument.
+
+Text:
+"""
+${text.substring(0, 5000)}
+"""`;
+
+  try {
+    return await geminiGenerate(null, [{ role: "user", parts: [{ text: prompt }] }]);
+  } catch (e) {
+    console.error(e);
+    return "I’m having trouble connecting right now. Please check the server logs and try again.";
+  }
+};
+
+export const generateSemanticMap = async (text: string): Promise<string> => {
+  const prompt = `Perform an Infranodus-style semantic network analysis on the following text. Identify:
+1. The main thematic clusters (patterns).
+2. The structural gaps (missing connections between clusters).
+3. Recommendations for bridging these gaps to create a more cohesive narrative.
+
+Text:
+"""
+${text.substring(0, 5000)}
+"""`;
+
+  try {
+    return await geminiGenerate(null, [{ role: "user", parts: [{ text: prompt }] }]);
+  } catch (e) {
+    console.error(e);
+    return "I’m having trouble connecting right now. Please check the server logs and try again.";
+  }
+};
+
+export const generateSuggestions = async (text: string): Promise<string[]> => {
+  const prompt = `Based on the following text, suggest 3 relevant research programs and architectural practice examples. Return ONLY a JSON array of strings. Do not include markdown formatting or any other text.
+  
+Text:
+"""
+${text.substring(0, 3000)}
+"""`;
+
+  try {
+    const out = await geminiGenerate(null, [{ role: "user", parts: [{ text: prompt }] }]);
+    const cleanOut = out.replace(/```json/g, "").replace(/```/g, "").trim();
+    return JSON.parse(cleanOut);
+  } catch (e) {
+    console.error(e);
+    return [];
+  }
 };
 
 // IMPORTANT: This one currently asks the model to use googleSearch tool.

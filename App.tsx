@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef, useLayoutEffect } from 'react';
 import { InquiryStage, InquiryMove, InquiryPhase, ChatMessage, UploadedFile, ConceptNode, Project, OrbAction } from './types';
-import { generateTutorResponse, summarizeFile, generateOrbResponse, checkAssumptions } from './services/geminiService';
+import { generateTutorResponse, summarizeFile, generateOrbResponse, checkAssumptions, generateResearchArgument, generateSemanticMap, generateSuggestions } from './services/geminiService';
 import { getRagFilesForSection } from './services/ragService';
 import PointCloud from './components/PointCloud';
 import TutorShell from './components/TutorShell';
@@ -13,6 +13,9 @@ import ConceptMapModal from './components/ConceptMapModal';
 import FormattingToolbar from './components/FormattingToolbar';
 import ImageGallery from './components/ImageGallery';
 import SocialModal from './components/SocialModal';
+import TutorialModal from './components/TutorialModal';
+import ProjectsModal from './components/ProjectsModal';
+import VisualAnalysisModal from './components/VisualAnalysisModal';
 import { WandIcon, ReferenceIcon, SendIcon, InfoIcon, ChevronLeftIcon, ChevronRightIcon, BookmarkIcon, ChevronDownIcon, LayoutHorizontalIcon, LayoutVerticalIcon, MapIcon, ImageIcon, FormatIcon, UsersIcon } from './components/icons';
 
 type FormatCommand = 'bold' | 'italic' | 'insertUnorderedList';
@@ -108,6 +111,10 @@ const App = () => {
   const [isSocialModalOpen, setIsSocialModalOpen] = useState(false);
   const [isImageGalleryOpen, setIsImageGalleryOpen] = useState(false);
   const [isFormattingToolbarOpen, setIsFormattingToolbarOpen] = useState(false);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(true);
+  const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
+  const [isVisualAnalysisModalOpen, setIsVisualAnalysisModalOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   
   // Input states
   const [chatInput, setChatInput] = useState<string>('');
@@ -133,6 +140,7 @@ const App = () => {
 
   // Load projects from localStorage on initial render
   useEffect(() => {
+    setIsTutorialOpen(true);
     const savedProjects = localStorage.getItem('site_projects');
     const savedActiveId = localStorage.getItem('site_activeProjectId');
     if (savedProjects) {
@@ -370,7 +378,7 @@ const App = () => {
       }
   };
   
-  const handleTutorReview = useCallback(() => {
+  const handleTutorReview = useCallback(async () => {
     if (!activeProject || isLoading) return;
     const plainText = stripHtml(activeProject.writingText);
     if (!plainText.trim()) {
@@ -380,6 +388,10 @@ const App = () => {
 
     const reviewPrompt = `Review my current draft. I am focusing on the '${activeStage}' stage. Please provide critique and suggestions based on my text below:\n\n---\n\n${plainText}`;
     handleTutorRequest(reviewPrompt);
+    
+    // Fetch suggestions
+    const newSuggestions = await generateSuggestions(plainText);
+    setSuggestions(newSuggestions);
   }, [activeProject, isLoading, activeStage, handleTutorRequest]);
   
   const handleCheckAssumptions = useCallback(async () => {
@@ -392,11 +404,17 @@ const App = () => {
       const newHistory = [...activeProject.chatHistory, userMessage];
       updateActiveProject({ chatHistory: newHistory });
 
-      const responseText = await checkAssumptions(plainText);
-      
-      const modelMessage: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: responseText };
-      setProjects(prevProjects => prevProjects.map(p => p.id === activeProjectId ? { ...p, chatHistory: [...newHistory, modelMessage] } : p));
-      setIsLoading(false);
+      try {
+        const responseText = await checkAssumptions(plainText);
+        const modelMessage: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: responseText };
+        setProjects(prevProjects => prevProjects.map(p => p.id === activeProjectId ? { ...p, chatHistory: [...newHistory, modelMessage] } : p));
+      } catch (error: any) {
+        console.error("Error checking assumptions:", error);
+        const errorMessage: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: "I encountered an error while checking assumptions. Please try again later." };
+        setProjects(prevProjects => prevProjects.map(p => p.id === activeProjectId ? { ...p, chatHistory: [...newHistory, errorMessage] } : p));
+      } finally {
+        setIsLoading(false);
+      }
   }, [activeProject, isLoading, activeProjectId]);
 
   useEffect(() => {
@@ -613,36 +631,14 @@ const App = () => {
   const isWritingAreaEmpty = !activeProject || (!stripHtml(activeProject.writingText).trim() && !activeProject.writingText.includes('<img'));
 
   const ProjectSwitcher = () => (
-    <div className="relative">
-      <button onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)} className="flex items-center gap-1 text-gray-500 hover:text-gray-900">
-        <ChevronDownIcon className="w-4 h-4" />
-      </button>
-      {isProjectDropdownOpen && (
-        <div 
-          className="absolute left-0 mt-2 w-56 origin-top-left bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-30"
-          onMouseLeave={() => setIsProjectDropdownOpen(false)}
-        >
-          <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
-            <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Projects</div>
-            {projects.map(p => (
-              <a href="#" key={p.id} onClick={(e) => { e.preventDefault(); setActiveProjectId(p.id); setIsProjectDropdownOpen(false); }}
-                 className={`block px-3 py-2 text-sm ${p.id === activeProjectId ? 'bg-gray-100 text-gray-900' : 'text-gray-700 hover:bg-gray-100'}`}>
-                {p.name}
-              </a>
-            ))}
-            <div className="border-t border-gray-100 my-1"></div>
-            <a href="#" onClick={(e) => { e.preventDefault(); createNewProject(); setIsProjectDropdownOpen(false); }}
-               className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
-              New Project
-            </a>
-            <a href="#" onClick={(e) => { e.preventDefault(); const newName = prompt('Enter new project name:', activeProject?.name); if(newName) renameProject(newName); setIsProjectDropdownOpen(false); }}
-               className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
-              Rename Current
-            </a>
-          </div>
-        </div>
-      )}
-    </div>
+    <button 
+      onClick={() => setIsProjectsModalOpen(true)} 
+      className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors border border-gray-200"
+      title="Manage Projects"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+      Projects
+    </button>
   );
 
   return (
@@ -747,6 +743,19 @@ const App = () => {
                     <InfoIcon className="w-4 h-4" />About Inquiry Studio
                  </button>
               </div>
+              
+              {suggestions.length > 0 && (
+                <div className="mt-8">
+                  <h2 className="text-sm font-semibold uppercase text-gray-500 mb-3">Suggestions</h2>
+                  <div className="space-y-2">
+                    {suggestions.map((suggestion, index) => (
+                      <div key={index} className="text-xs text-gray-600 bg-gray-100 p-2 rounded-md border border-gray-200">
+                        {suggestion}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
           </div>
         </aside>
         
@@ -803,18 +812,34 @@ const App = () => {
 
           <div className={`flex-shrink-0 flex flex-col bg-white/50 ${layoutMode === 'horizontal' ? 'h-1/3 max-h-[50vh] border-t border-gray-200/80' : 'w-[450px] max-w-[40%] border-l border-gray-200/80'}`}>
             <div className="p-3 flex items-center gap-4 border-b border-gray-200/80 flex-shrink-0">
-              <button onClick={handleTutorReview} disabled={isLoading || !activeProject} title="Review document (Cmd/Ctrl + Enter)" className="cursor-pointer disabled:cursor-not-allowed">
-                  <TutorShell progress={shellProgress} isThinking={isLoading} />
-              </button>
-              <TutorModeSelector move={inquiryMove} onMoveChange={handleInquiryMoveChange} />
-              <button 
-                onClick={handleCheckAssumptions}
-                disabled={isLoading || !activeProject}
-                className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-600 border border-gray-300"
-                title="Check for hidden premises and leaps"
-              >
-                Check Assumptions
-              </button>
+              <div className="flex gap-2">
+                <button 
+                  onClick={handleTutorReview} 
+                  disabled={isLoading || !activeProject} 
+                  title="Literature Analysis (Cmd/Ctrl + Enter)" 
+                  className="cursor-pointer disabled:cursor-not-allowed flex flex-col items-center group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-blue-50 border-2 border-blue-200 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                    <TutorShell progress={shellProgress} isThinking={isLoading} />
+                  </div>
+                  <span className="text-[10px] text-gray-500 mt-1 font-medium uppercase tracking-wider">Lit Analysis</span>
+                </button>
+                
+                <button 
+                  onClick={() => setIsVisualAnalysisModalOpen(true)}
+                  disabled={isLoading || !activeProject}
+                  title="Visual Analysis Tool"
+                  className="cursor-pointer disabled:cursor-not-allowed flex flex-col items-center group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-purple-50 border-2 border-purple-200 flex items-center justify-center group-hover:bg-purple-100 transition-colors">
+                    <MapIcon className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <span className="text-[10px] text-gray-500 mt-1 font-medium uppercase tracking-wider">Visual Tool</span>
+                </button>
+              </div>
+              <div className="flex-1">
+                <TutorModeSelector move={inquiryMove} onMoveChange={handleInquiryMoveChange} />
+              </div>
             </div>
 
             <div className="flex-1 p-4 space-y-4 overflow-y-auto bg-gray-50/50 min-h-0">
@@ -871,6 +896,53 @@ const App = () => {
           </div>
         </div>
       </main>
+      
+      <TutorialModal isOpen={isTutorialOpen} onClose={() => setIsTutorialOpen(false)} />
+      <ProjectsModal 
+        isOpen={isProjectsModalOpen} 
+        onClose={() => setIsProjectsModalOpen(false)} 
+        projects={projects}
+        activeProjectId={activeProjectId}
+        onSelectProject={setActiveProjectId}
+        onCreateProject={createNewProject}
+        onDeleteProject={(id) => {
+          setProjects(prev => prev.filter(p => p.id !== id));
+          if (activeProjectId === id) {
+            setActiveProjectId(projects.find(p => p.id !== id)?.id || null);
+          }
+        }}
+      />
+      <VisualAnalysisModal 
+        isOpen={isVisualAnalysisModalOpen} 
+        onClose={() => setIsVisualAnalysisModalOpen(false)} 
+        onSelectOption={async (option) => {
+          if (!activeProject) return;
+          const plainText = stripHtml(activeProject.writingText);
+          
+          if (option === 'mental_map') {
+            setIsMapModalOpen(true);
+          } else if (option === 'research_argument') {
+            setIsLoading(true);
+            const userMsg: ChatMessage = { id: `user-${Date.now()}`, role: 'user', content: "Generate a Toulmin Research Argument analysis." };
+            const response = await generateResearchArgument(plainText);
+            const modelMsg: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: response };
+            updateActiveProject({ chatHistory: [...activeProject.chatHistory, userMsg, modelMsg] });
+            setIsLoading(false);
+          } else if (option === 'semantic_map') {
+            setIsLoading(true);
+            const userMsg: ChatMessage = { id: `user-${Date.now()}`, role: 'user', content: "Generate a Semantic Map analysis." };
+            const response = await generateSemanticMap(plainText);
+            const modelMsg: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: response };
+            updateActiveProject({ chatHistory: [...activeProject.chatHistory, userMsg, modelMsg] });
+            setIsLoading(false);
+          }
+          
+          if (plainText.trim()) {
+            const newSuggestions = await generateSuggestions(plainText);
+            setSuggestions(newSuggestions);
+          }
+        }}
+      />
     </div>
   );
 };
