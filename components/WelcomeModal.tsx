@@ -74,7 +74,7 @@ const WelcomeModal = ({ isOpen, onClose }: WelcomeModalProps) => {
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-95 z-50 flex items-center justify-center p-4 text-white" aria-modal="true" role="dialog">
-            <button onClick={onClose} className="absolute top-6 right-6 text-gray-400 hover:text-white text-3xl font-bold p-4">&times;</button>
+            <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white text-4xl font-bold p-6 leading-none">&times;</button>
             <div className="relative z-10 w-full max-w-2xl text-center flex flex-col items-center">
                 <div className="w-64 h-64 mb-6">
                     <TutorPointCloud />

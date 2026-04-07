@@ -9,6 +9,7 @@ interface ProjectsModalProps {
   onSelectProject: (id: string) => void;
   onCreateProject: () => void;
   onDeleteProject: (id: string) => void;
+  onRenameProject: (id: string, newName: string) => void;
 }
 
 const ProjectsModal: React.FC<ProjectsModalProps> = ({
@@ -18,9 +19,20 @@ const ProjectsModal: React.FC<ProjectsModalProps> = ({
   activeProjectId,
   onSelectProject,
   onCreateProject,
-  onDeleteProject
+  onDeleteProject,
+  onRenameProject
 }) => {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+
   if (!isOpen) return null;
+
+  const handleRenameSubmit = (id: string) => {
+    if (editName.trim()) {
+      onRenameProject(id, editName.trim());
+    }
+    setEditingId(null);
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -34,20 +46,43 @@ const ProjectsModal: React.FC<ProjectsModalProps> = ({
               key={project.id} 
               className={`flex items-center justify-between p-3 rounded-md border transition-colors ${project.id === activeProjectId ? 'border-gray-800 bg-gray-50' : 'border-gray-200 hover:border-gray-400'}`}
             >
-              <button 
-                className="flex-1 text-left font-medium text-sm truncate"
-                onClick={() => {
-                  onSelectProject(project.id);
-                  onClose();
-                }}
-              >
-                {project.name}
-                <div className="text-xs text-gray-500 mt-1">
-                  Last updated: {new Date(project.lastModified).toLocaleDateString()}
+              {editingId === project.id ? (
+                <div className="flex-1 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleRenameSubmit(project.id);
+                      if (e.key === 'Escape') setEditingId(null);
+                    }}
+                    autoFocus
+                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:border-gray-500"
+                  />
+                  <button onClick={() => handleRenameSubmit(project.id)} className="text-xs bg-gray-800 text-white px-2 py-1 rounded">Save</button>
                 </div>
-              </button>
+              ) : (
+                <button 
+                  className="flex-1 text-left font-medium text-sm truncate"
+                  onClick={() => {
+                    onSelectProject(project.id);
+                    onClose();
+                  }}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setEditingId(project.id);
+                    setEditName(project.name);
+                  }}
+                  title="Double-click to rename"
+                >
+                  {project.name}
+                  <div className="text-xs text-gray-500 mt-1">
+                    Last updated: {new Date(project.lastModified).toLocaleDateString()}
+                  </div>
+                </button>
+              )}
               
-              {projects.length > 1 && (
+              {projects.length > 1 && !editingId && (
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();

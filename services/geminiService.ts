@@ -6,8 +6,6 @@ import { getRagFilesForSection } from "./ragService";
 const model = "gemini-3.1-pro-preview";
 
 export const generateVisualizationImage = async (text: string, type: 'research_argument' | 'semantic_map'): Promise<string | null> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  
   let prompt = "";
   if (type === 'research_argument') {
     prompt = `Create a clean, professional, and highly legible diagram or mind map illustrating a Toulmin Research Argument based on this text. Show Claim, Evidence, Warrant, and Assumptions. Use clear text and a structured layout.\n\nText:\n${text.substring(0, 1000)}`;
@@ -16,21 +14,32 @@ export const generateVisualizationImage = async (text: string, type: 'research_a
   }
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: {
-        parts: [
-          { text: prompt }
-        ]
-      },
-      config: {
-        imageConfig: {
-          aspectRatio: "16:9"
+    const endpoint = `/api-proxy/v1beta/models/gemini-2.5-flash-image:generateContent`;
+    const body = {
+      contents: [
+        {
+          parts: [{ text: prompt }]
         }
+      ],
+      generationConfig: {
+        responseModalities: ["IMAGE"]
       }
+    };
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     });
 
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Gemini proxy error ${res.status}: ${err}`);
+    }
+
+    const data = await res.json();
+
+    for (const part of data?.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
         return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
       }
@@ -89,6 +98,7 @@ const getSystemInstruction = async (
     `You are an AI epistemic scaffold for an architecture/research student. ` +
     `Your role is to support the transition from exploratory problem construction to formal research design and structured validation. ` +
     `You are NOT just a writing tutor; you are a partner in inquiry. Maintain a calm, institutional, grant-ready tone. ` +
+    `HOWEVER, if the student expresses anxiety, overwhelm, or imposter syndrome (e.g., feeling lost, behind, or misunderstood), adopt a warmer, more empathetic, and supportive mentoring tone. Validate their feelings before offering structured advice. ` +
     `CRITICAL GUARDRAILS: ` +
     `1. DO NOT fabricate citations or references. If asked for literature, teach the student how to search academic databases (e.g., Google Scholar, JSTOR, Avery Index) using specific keywords related to their topic. ` +
     `2. DO NOT ghost-write for the student. If asked to write a section, explicitly refuse and instead offer an outline, structural advice, or a review of their existing draft. ` +
@@ -120,8 +130,13 @@ const getSystemInstruction = async (
     instruction += `Focus on editorial review, structuring the argument, advising on writing, and grammar support. Act as a peer reviewer. `;
   }
 
-  const practiceResearchFocus = practiceResearchRatio < 50 ? "more practice-oriented" : "more research-oriented";
-  instruction += `Your feedback should be ${practiceResearchFocus}. `;
+  if (practiceResearchRatio < 30) {
+    instruction += `Your feedback should be HIGHLY PRACTICE-ORIENTED. Focus heavily on design application, material constraints, fabrication, site context, and how these ideas translate into physical architecture. Use language familiar to studio practice. `;
+  } else if (practiceResearchRatio > 70) {
+    instruction += `Your feedback should be HIGHLY RESEARCH-ORIENTED. Focus heavily on theoretical frameworks, methodological rigor, literature gaps, and academic contribution. Use formal academic language. `;
+  } else {
+    instruction += `Your feedback should balance practice and research. Connect theoretical concepts to potential design applications, and ensure design ideas are grounded in rigorous research. `;
+  }
 
   if (writingText) {
     instruction += `The student is currently working on the following text in their main editor. Use this as context for your responses, and if appropriate, offer explicit recommendations on this text:\n\n---\n${writingText.substring(0, 2000)}\n---\n\n`;
@@ -151,9 +166,13 @@ export const generateTutorResponse = async (
 
   try {
     return await geminiGenerate(systemInstruction, contents);
-  } catch (e) {
+  } catch (e: any) {
     console.error(e);
-    return "I’m having trouble connecting right now. Please check the server logs and try again.";
+    const errorMsg = e.message || String(e);
+    if (errorMsg.includes('timeout')) {
+      throw new Error("The analysis timed out. Your text might be too long for a single request. Try breaking it into smaller sections, or wait a moment and try again.");
+    }
+    throw new Error(`I encountered an error connecting to the AI service (${errorMsg}). Please check your network connection and try again.`);
   }
 };
 
@@ -238,7 +257,6 @@ export const generateOrbResponse = async (word: string, action: OrbAction, conte
 };
 
 export const generateResearchArgument = async (text: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const prompt = `Provide a brief description of the visual diagram representing the research argument for the following text. Briefly list the Claim, Evidence, Warrant, and Assumptions in a few concise bullet points.
 
 Text:
@@ -247,11 +265,8 @@ ${text.substring(0, 5000)}
 """`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-pro-preview',
-      contents: prompt
-    });
-    return response.text || "Analysis generated successfully.";
+    const responseText = await geminiGenerate(null, [{ role: "user", parts: [{ text: prompt }] }]);
+    return responseText || "Analysis generated successfully.";
   } catch (e) {
     console.error(e);
     return "I’m having trouble connecting right now. Please check the server logs and try again.";
@@ -259,7 +274,6 @@ ${text.substring(0, 5000)}
 };
 
 export const generateSemanticMap = async (text: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const prompt = `Provide a brief description of the semantic network map for the following text. Briefly list the main thematic clusters and structural gaps in a few concise bullet points.
 
 Text:
@@ -268,11 +282,8 @@ ${text.substring(0, 5000)}
 """`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-pro-preview',
-      contents: prompt
-    });
-    return response.text || "Analysis generated successfully.";
+    const responseText = await geminiGenerate(null, [{ role: "user", parts: [{ text: prompt }] }]);
+    return responseText || "Analysis generated successfully.";
   } catch (e) {
     console.error(e);
     return "I’m having trouble connecting right now. Please check the server logs and try again.";

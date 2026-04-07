@@ -17,6 +17,7 @@ export interface ChatMessage {
   role: 'user' | 'model' | 'system';
   content: string;
   bookmarked?: boolean;
+  isError?: boolean;
 }
 
 export interface UploadedFile {
@@ -35,6 +36,12 @@ export interface ConceptNode {
     type: 'tension' | 'variable' | 'hypothesis' | 'evidence' | 'assumption' | 'user_selection' | 'ai_bookmark' | 'user_reference';
 }
 
+export interface ProjectVersion {
+  id: string;
+  timestamp: number;
+  text: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -43,6 +50,7 @@ export interface Project {
   chatHistory: ChatMessage[];
   studentFiles: UploadedFile[];
   conceptMapNodes: ConceptNode[];
+  versions?: ProjectVersion[];
 }
 
 export interface Researcher {

@@ -44,7 +44,7 @@ app.all("/api-proxy/*", async (req, res) => {
         Accept: "*/*",
       },
       data: req.body,
-      timeout: 20000,
+      timeout: 120000,
     });
 
     res.status(r.status);

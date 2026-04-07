@@ -7,7 +7,6 @@ import TutorShell from './components/TutorShell';
 import ReferencesModal from './components/ReferencesModal';
 import WelcomeModal from './components/WelcomeModal';
 import AboutModal from './components/AboutModal';
-import ConceptOrb from './components/ConceptOrb';
 import ConceptMapModal from './components/ConceptMapModal';
 import FormattingToolbar from './components/FormattingToolbar';
 import ImageGallery from './components/ImageGallery';
@@ -16,8 +15,6 @@ import TutorialModal from './components/TutorialModal';
 import ProjectsModal from './components/ProjectsModal';
 import VisualAnalysisModal from './components/VisualAnalysisModal';
 import { WandIcon, ReferenceIcon, SendIcon, InfoIcon, ChevronLeftIcon, ChevronRightIcon, BookmarkIcon, ChevronDownIcon, LayoutHorizontalIcon, LayoutVerticalIcon, MapIcon, ImageIcon, FormatIcon, UsersIcon } from './components/icons';
-
-type FormatCommand = 'bold' | 'italic' | 'insertUnorderedList';
 
 const stripHtml = (html: string) => {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -216,11 +213,17 @@ const App = () => {
     updateActiveProject({ chatHistory: newHistory });
     setChatInput('');
 
-    const responseText = await generateTutorResponse(prompt, newHistory, activeStage, activeProject.studentFiles, practiceResearchRatio, activeProject.writingText);
-    
-    const modelMessage: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: responseText };
-    setProjects(prevProjects => prevProjects.map(p => p.id === activeProjectId ? { ...p, chatHistory: [...newHistory, modelMessage] } : p));
-    setIsLoading(false);
+    try {
+      const responseText = await generateTutorResponse(prompt, newHistory, activeStage, activeProject.studentFiles, practiceResearchRatio, activeProject.writingText);
+      const modelMessage: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: responseText };
+      setProjects(prevProjects => prevProjects.map(p => p.id === activeProjectId ? { ...p, chatHistory: [...newHistory, modelMessage] } : p));
+    } catch (error: any) {
+      console.error("Error generating tutor response:", error);
+      const errorMsg: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: error.message || "An unexpected error occurred.", isError: true };
+      setProjects(prevProjects => prevProjects.map(p => p.id === activeProjectId ? { ...p, chatHistory: [...newHistory, errorMsg] } : p));
+    } finally {
+      setIsLoading(false);
+    }
   }, [activeProject, activeProjectId, activeStage, practiceResearchRatio]);
 
   const handleStageChange = (newStage: InquiryStage) => {
@@ -255,6 +258,7 @@ const App = () => {
       chatHistory: [],
       studentFiles: [],
       conceptMapNodes: [],
+      versions: [],
     };
     setProjects(prev => [...prev, newProject]);
     setActiveProjectId(newProject.id);
@@ -365,15 +369,33 @@ const App = () => {
       }
   };
 
-  const handleTextFormat = (command: FormatCommand) => {
+  const handleInsertToNotebook = (text: string) => {
       if(writingAreaRef.current) {
-        writingAreaRef.current.focus();
-        document.execCommand(command, false);
-        updateActiveProject({ writingText: writingAreaRef.current.innerHTML });
-        setIsFormattingToolbarOpen(false);
+          writingAreaRef.current.focus();
+          
+          // Move cursor to the end of the content
+          const range = document.createRange();
+          range.selectNodeContents(writingAreaRef.current);
+          range.collapse(false);
+          const selection = window.getSelection();
+          if (selection) {
+              selection.removeAllRanges();
+              selection.addRange(range);
+          }
+          
+          const textToInsert = `<br/><br/><strong>AI Suggestion:</strong><br/>${text.replace(/\n/g, '<br/>')}`;
+          document.execCommand('insertHTML', false, textToInsert);
+          updateActiveProject({ writingText: writingAreaRef.current.innerHTML });
       }
   };
-  
+
+  const handleTextFormat = (command: string, value?: string) => {
+      if(writingAreaRef.current) {
+        document.execCommand(command, false, value);
+        updateActiveProject({ writingText: writingAreaRef.current.innerHTML });
+      }
+  };
+
   const handleTutorReview = useCallback(async () => {
     if (!activeProject || isLoading) return;
     const plainText = stripHtml(activeProject.writingText);
@@ -438,6 +460,11 @@ const App = () => {
 
     if (!selection || selection.rangeCount === 0 || !text || text.length < 3) {
       setSelectionPopover(null);
+      return;
+    }
+    
+    // Ignore clicks outside the editor (e.g. formatting buttons)
+    if (!(e.target as HTMLElement).closest('.editable-canvas')) {
       return;
     }
     
@@ -558,24 +585,32 @@ const App = () => {
       setIsLoading(false);
   };
 
-  const handleExploreSelection = () => {
+  const handleExploreSelection = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
       if (selectionPopover && activeProject) {
           const prompt = `Based on my focus on '${activeStage}', please explore, critique, or offer alternative phrasing for the following text (a horizontal search for related ideas): """${selectionPopover.text}"""`;
           handleTutorRequest(prompt);
           const newNode: ConceptNode = { id: `selection-${Date.now()}`, content: selectionPopover.text, type: 'user_selection' };
           updateActiveProject({ conceptMapNodes: [...activeProject.conceptMapNodes.filter(n => n.content !== newNode.content), newNode] });
+          setSelectionPopover(null);
       }
   };
 
-  const handleTellMeMore = () => {
+  const handleTellMeMore = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (selectionPopover) {
       const { text, context } = selectionPopover;
       const prompt = `Please elaborate on "${text}". Provide a more in-depth, vertical explanation. You can use the following as the original context of the selection: """${context}"""`;
       handleTutorRequest(prompt);
+      setSelectionPopover(null);
     }
   };
   
-  const handleBookmarkSelection = () => {
+  const handleBookmarkSelection = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (selectionPopover && activeProject) {
         const newNode: ConceptNode = {
             id: `selection-${Date.now()}`,
@@ -626,6 +661,19 @@ const App = () => {
 
   const isWritingAreaEmpty = !activeProject || (!stripHtml(activeProject.writingText).trim() && !activeProject.writingText.includes('<img'));
 
+  const handleSaveVersion = () => {
+    if (!activeProject) return;
+    const newVersion = {
+      id: `v-${Date.now()}`,
+      timestamp: Date.now(),
+      text: activeProject.writingText
+    };
+    updateActiveProject({
+      versions: [...(activeProject.versions || []), newVersion]
+    });
+    // Optional: show a toast or temporary success state
+  };
+
   const ProjectSwitcher = () => (
     <button 
       onClick={() => setIsProjectsModalOpen(true)} 
@@ -658,7 +706,6 @@ const App = () => {
           onClose={() => setIsSocialModalOpen(false)}
           projectText={stripHtml(activeProject?.writingText || '')}
       />
-      {orbState && <ConceptOrb orbState={orbState} onAction={handleOrbAction} onClose={() => setOrbState(null)} />}
       <ImageGallery 
         isOpen={isImageGalleryOpen}
         onClose={() => setIsImageGalleryOpen(false)}
@@ -668,13 +715,13 @@ const App = () => {
        
       {/* Popover logic is now based on useLayoutEffect to prevent going off-screen */}
       <div ref={popoverRef} className="fixed z-20 bg-gray-800 text-white rounded-md shadow-lg flex items-center" style={popoverStyle} onMouseDown={(e) => e.stopPropagation()}>
-         <button onClick={handleExploreSelection} className="px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-700 rounded-l-md"><WandIcon className="w-4 h-4"/>Explore</button>
+         <button onMouseDown={handleExploreSelection} className="px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-700 rounded-l-md"><WandIcon className="w-4 h-4"/>Explore</button>
          <div className="w-px h-4 bg-gray-600"></div>
-         <button onClick={handleTellMeMore} className="px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-700"><InfoIcon className="w-4 h-4"/>Tell me more</button>
+         <button onMouseDown={handleTellMeMore} className="px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-700"><InfoIcon className="w-4 h-4"/>Tell me more</button>
          <div className="w-px h-4 bg-gray-600"></div>
-         <button onClick={handleBookmarkSelection} className="px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-700"><BookmarkIcon className="w-4 h-4"/>Bookmark</button>
+         <button onMouseDown={handleBookmarkSelection} className="px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-700"><BookmarkIcon className="w-4 h-4"/>Bookmark</button>
          <div className="w-px h-4 bg-gray-600"></div>
-         <button onClick={() => setSelectionPopover(null)} className="px-2 py-2 text-sm hover:bg-gray-700 rounded-r-md">&times;</button>
+         <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setSelectionPopover(null); }} className="px-2 py-2 text-sm hover:bg-gray-700 rounded-r-md">&times;</button>
       </div>
 
 
@@ -698,6 +745,10 @@ const App = () => {
                         <div className="flex justify-between text-[10px] text-gray-400 mt-1">
                           <span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span>
                         </div>
+                        <p className="text-[10px] text-gray-400 mt-2 leading-tight">
+                          <strong>Practice:</strong> Focuses on design and making.<br/>
+                          <strong>Research:</strong> Focuses on theory and methods.
+                        </p>
                     </div>
                 </div>
               </div>
@@ -724,18 +775,6 @@ const App = () => {
                  </button>
               </div>
               
-              {suggestions.length > 0 && (
-                <div className="mt-8">
-                  <h2 className="text-sm font-semibold uppercase text-gray-500 mb-3">Suggestions</h2>
-                  <div className="space-y-2">
-                    {suggestions.map((suggestion, index) => (
-                      <div key={index} className="text-xs text-gray-600 bg-gray-100 p-2 rounded-md border border-gray-200">
-                        {suggestion}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
           </div>
         </aside>
         
@@ -749,8 +788,45 @@ const App = () => {
                <div className="flex items-center gap-2">
                  <h1 className="text-lg font-bold truncate">{activeProject?.name || 'Loading...'}</h1>
                  <ProjectSwitcher />
+                 {activeProject && (
+                   <span className="text-xs text-gray-500 ml-2">
+                     {stripHtml(activeProject.writingText).trim().split(/\s+/).filter(w => w.length > 0).length} words
+                   </span>
+                 )}
                </div>
                <div className="flex items-center gap-4 flex-shrink-0">
+                 <button 
+                   onClick={handleSaveVersion}
+                   className="text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-md transition-colors border border-gray-200 flex items-center gap-1"
+                   title="Save current draft version"
+                 >
+                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                   Save Version
+                 </button>
+                 <div className="relative group">
+                   <button 
+                     className="text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-md transition-colors border border-gray-200 flex items-center gap-1"
+                     title="View saved versions"
+                   >
+                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                     Versions ({activeProject?.versions?.length || 0})
+                   </button>
+                   <div className="absolute top-full right-0 mt-1 w-48 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 max-h-64 overflow-y-auto">
+                     {activeProject?.versions && activeProject.versions.length > 0 ? (
+                       activeProject.versions.map((v, i) => (
+                         <button 
+                           key={v.id}
+                           onClick={() => updateActiveProject({ writingText: v.text })}
+                           className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 border-b border-gray-100 last:border-0"
+                         >
+                           Version {i + 1} - {new Date(v.timestamp).toLocaleTimeString()}
+                         </button>
+                       ))
+                     ) : (
+                       <div className="px-4 py-3 text-xs text-gray-500 text-center">No versions saved</div>
+                     )}
+                   </div>
+                 </div>
                  <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-md">
                     <button onClick={() => setLayoutMode('horizontal')} title="Horizontal Layout" className={`p-1 rounded transition-colors ${layoutMode === 'horizontal' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:bg-gray-200 hover:text-gray-800'}`}>
                         <LayoutHorizontalIcon className="w-5 h-5" />
@@ -759,14 +835,9 @@ const App = () => {
                         <LayoutVerticalIcon className="w-5 h-5" />
                     </button>
                  </div>
-                 <div className="relative">
-                    <button onClick={() => setIsFormattingToolbarOpen(p => !p)} title="Formatting" className="text-gray-500 hover:text-gray-900"><FormatIcon className="w-5 h-5"/></button>
-                    {isFormattingToolbarOpen && (
-                        <div className="absolute top-full right-0 mt-2 z-20" onMouseLeave={() => setIsFormattingToolbarOpen(false)}>
-                            <FormattingToolbar onFormat={handleTextFormat} />
-                        </div>
-                    )}
-                 </div>
+                 <div className="w-px h-6 bg-gray-200"></div>
+                 <FormattingToolbar onFormat={handleTextFormat} />
+                 <div className="w-px h-6 bg-gray-200"></div>
                  <button onClick={() => setIsImageGalleryOpen(true)} title="Image Desk" className="text-gray-500 hover:text-gray-900"><ImageIcon className="w-5 h-5" /></button>
                  <button onClick={() => setIsReferencesModalOpen(true)} title="References" className="text-gray-500 hover:text-gray-900"><ReferenceIcon className="w-5 h-5" /></button>
                </div>
@@ -787,10 +858,31 @@ const App = () => {
                 onScroll={() => { setSelectionPopover(null); setOrbState(null); }}
                 disabled={!activeProject}
               />
+              
+              {suggestions.length > 0 && (
+                <div className="mx-8 md:mx-12 mb-12 p-6 border border-gray-200 bg-gray-50 rounded-xl shadow-sm">
+                  <h2 className="text-sm font-semibold uppercase text-gray-500 mb-4 flex items-center gap-2">
+                    <WandIcon className="w-4 h-4" />
+                    AI Suggestions & Precedents
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {suggestions.map((suggestion, index) => (
+                      <button 
+                        key={index} 
+                        onClick={() => handleTutorRequest(`Tell me more about this suggestion: ${suggestion}`)}
+                        className="text-left text-xs text-gray-700 bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:border-gray-400 hover:shadow-md transition-all group flex flex-col justify-between"
+                      >
+                        <p className="line-clamp-4">{suggestion}</p>
+                        <span className="text-blue-600 font-medium mt-3 inline-block opacity-0 group-hover:opacity-100 transition-opacity">Explore in chat &rarr;</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className={`flex-shrink-0 flex flex-col bg-white/50 ${layoutMode === 'horizontal' ? 'h-1/3 max-h-[50vh] border-t border-gray-200/80' : 'w-[450px] max-w-[40%] border-l border-gray-200/80'}`}>
+          <div className={`flex-shrink-0 flex flex-col bg-gray-50 ${layoutMode === 'horizontal' ? 'h-1/3 max-h-[50vh] border-t border-gray-200/80' : 'w-[450px] max-w-[40%] border-l border-gray-200/80'}`}>
             <div className="p-3 flex items-center gap-4 border-b border-gray-200/80 flex-shrink-0">
               <div className="flex gap-2 w-full justify-center">
                 <button 
@@ -819,11 +911,11 @@ const App = () => {
               </div>
             </div>
 
-            <div className="flex-1 p-4 space-y-4 overflow-y-auto bg-gray-50/50 min-h-0">
+            <div className="flex-1 p-4 space-y-4 overflow-y-auto bg-gray-100 min-h-0">
                {(!activeProject || activeProject.chatHistory.length === 0) && <div className="text-center text-sm text-gray-500 h-full flex items-center justify-center">Chat history will appear here.</div>}
-               {activeProject?.chatHistory.map((msg) => (
+               {activeProject?.chatHistory.map((msg, index) => (
                   <div key={msg.id} className={`flex group ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`relative max-w-md lg:max-w-lg rounded-lg px-4 py-2 text-sm whitespace-pre-wrap break-words ${msg.role === 'user' ? 'bg-gray-800 text-white' : 'bg-white border'}`}>
+                      <div className={`relative max-w-md lg:max-w-lg rounded-lg px-4 py-2 text-sm whitespace-pre-wrap break-words ${msg.role === 'user' ? 'bg-gray-800 text-white' : msg.isError ? 'bg-red-50 border border-red-200 text-red-800' : 'bg-white border'}`}>
                           {msg.role === 'model' ? (
                             <div onMouseUp={(e) => handleChatTextSelection(e, msg.content)}>
                               {renderFormattedMessage(msg.content)}
@@ -831,10 +923,33 @@ const App = () => {
                           ) : (
                             msg.content
                           )}
-                          {msg.role === 'model' && (
-                              <button onClick={() => handleToggleBookmark(msg.id)} className="absolute -top-2 -right-2 p-1 bg-white rounded-full border text-gray-400 hover:text-gray-800 hover:border-gray-800 opacity-0 group-hover:opacity-100 transition-opacity" title="Bookmark insight">
-                                <BookmarkIcon className="w-4 h-4" filled={msg.bookmarked}/>
+                          {msg.role === 'model' && !msg.isError && (
+                              <div className="absolute -top-2 -right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => handleInsertToNotebook(msg.content)} className="p-1 bg-white rounded-full border text-gray-400 hover:text-gray-800 hover:border-gray-800 shadow-sm" title="Insert to Notebook">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                                </button>
+                                <button onClick={() => handleToggleBookmark(msg.id)} className="p-1 bg-white rounded-full border text-gray-400 hover:text-gray-800 hover:border-gray-800 shadow-sm" title="Bookmark insight">
+                                  <BookmarkIcon className="w-4 h-4" filled={msg.bookmarked}/>
+                                </button>
+                              </div>
+                          )}
+                          {msg.isError && index === activeProject.chatHistory.length - 1 && (
+                            <div className="mt-2 text-right">
+                              <button 
+                                onClick={() => {
+                                  // Remove the error message and the preceding user message, then re-trigger
+                                  const newHistory = activeProject.chatHistory.slice(0, -2);
+                                  const lastUserMsg = activeProject.chatHistory[activeProject.chatHistory.length - 2];
+                                  updateActiveProject({ chatHistory: newHistory });
+                                  if (lastUserMsg && lastUserMsg.role === 'user') {
+                                    handleTutorRequest(lastUserMsg.content);
+                                  }
+                                }}
+                                className="text-xs bg-red-100 hover:bg-red-200 text-red-800 px-3 py-1 rounded-md font-medium transition-colors"
+                              >
+                                Retry
                               </button>
+                            </div>
                           )}
                       </div>
                   </div>
@@ -888,6 +1003,9 @@ const App = () => {
             setActiveProjectId(projects.find(p => p.id !== id)?.id || null);
           }
         }}
+        onRenameProject={(id, newName) => {
+          setProjects(prev => prev.map(p => p.id === id ? { ...p, name: newName, lastModified: Date.now() } : p));
+        }}
       />
       <VisualAnalysisModal 
         isOpen={isVisualAnalysisModalOpen} 
@@ -902,38 +1020,52 @@ const App = () => {
             setIsLoading(true);
             const userMsg: ChatMessage = { id: `user-${Date.now()}`, role: 'user', content: "Generate a Toulmin Research Argument analysis." };
             
-            // Generate text and image in parallel
-            const [response, image] = await Promise.all([
-              generateResearchArgument(plainText),
-              generateVisualizationImage(plainText, 'research_argument')
-            ]);
-            
-            const modelMsg: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: response };
-            updateActiveProject({ chatHistory: [...activeProject.chatHistory, userMsg, modelMsg] });
-            
-            if (image) {
-              setVisualizationImage(image);
-              setIsVisualizationImageOpen(true);
+            try {
+              // Generate text and image in parallel
+              const [response, image] = await Promise.all([
+                generateResearchArgument(plainText),
+                generateVisualizationImage(plainText, 'research_argument')
+              ]);
+              
+              const modelMsg: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: response };
+              updateActiveProject({ chatHistory: [...activeProject.chatHistory, userMsg, modelMsg] });
+              
+              if (image) {
+                setVisualizationImage(image);
+                setIsVisualizationImageOpen(true);
+              }
+            } catch (error: any) {
+              console.error("Error generating visual analysis:", error);
+              const errorMsg: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: `I encountered an error while generating the visual analysis (${error.message || String(error)}). Please try again.`, isError: true };
+              updateActiveProject({ chatHistory: [...activeProject.chatHistory, userMsg, errorMsg] });
+            } finally {
+              setIsLoading(false);
             }
-            setIsLoading(false);
           } else if (option === 'semantic_map') {
             setIsLoading(true);
             const userMsg: ChatMessage = { id: `user-${Date.now()}`, role: 'user', content: "Generate a Semantic Map analysis." };
             
-            // Generate text and image in parallel
-            const [response, image] = await Promise.all([
-              generateSemanticMap(plainText),
-              generateVisualizationImage(plainText, 'semantic_map')
-            ]);
-            
-            const modelMsg: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: response };
-            updateActiveProject({ chatHistory: [...activeProject.chatHistory, userMsg, modelMsg] });
-            
-            if (image) {
-              setVisualizationImage(image);
-              setIsVisualizationImageOpen(true);
+            try {
+              // Generate text and image in parallel
+              const [response, image] = await Promise.all([
+                generateSemanticMap(plainText),
+                generateVisualizationImage(plainText, 'semantic_map')
+              ]);
+              
+              const modelMsg: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: response };
+              updateActiveProject({ chatHistory: [...activeProject.chatHistory, userMsg, modelMsg] });
+              
+              if (image) {
+                setVisualizationImage(image);
+                setIsVisualizationImageOpen(true);
+              }
+            } catch (error: any) {
+              console.error("Error generating visual analysis:", error);
+              const errorMsg: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: `I encountered an error while generating the visual analysis (${error.message || String(error)}). Please try again.`, isError: true };
+              updateActiveProject({ chatHistory: [...activeProject.chatHistory, userMsg, errorMsg] });
+            } finally {
+              setIsLoading(false);
             }
-            setIsLoading(false);
           }
           
           if (plainText.trim()) {
