@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "FeedbackSubmission": {
+      "title": "FeedbackSubmission",
+      "description": "A user feedback submission from the About Modal survey.",
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "number",
+          "description": "The time the feedback was submitted."
+        },
+        "q1": {
+          "type": "string",
+          "description": "Response to Q1."
+        },
+        "q2": {
+          "type": "string",
+          "description": "Response to Q2."
+        },
+        "q3": {
+          "type": "string",
+          "description": "Response to Q3."
+        },
+        "q4": {
+          "type": "string",
+          "description": "Response to Q4."
+        },
+        "q5": {
+          "type": "string",
+          "description": "Response to Q5."
+        },
+        "q6": {
+          "type": "string",
+          "description": "Response to Q6."
+        },
+        "q7": {
+          "type": "string",
+          "description": "Response to Q7."
+        },
+        "q8": {
+          "type": "string",
+          "description": "Response to Q8."
+        },
+        "tlx1": {
+          "type": "string",
+          "description": "Response to TLX1."
+        },
+        "tlx2": {
+          "type": "string",
+          "description": "Response to TLX2."
+        },
+        "tlx3": {
+          "type": "string",
+          "description": "Response to TLX3."
+        },
+        "tlx4": {
+          "type": "string",
+          "description": "Response to TLX4."
+        },
+        "tlx5": {
+          "type": "string",
+          "description": "Response to TLX5."
+        },
+        "q_harder": {
+          "type": "string",
+          "description": "Optional response to what made the process easier or harder."
+        }
+      },
+      "required": ["timestamp"]
+    }
+  },
+  "firestore": {
+    "/feedback/{feedbackId}": {
+      "schema": {
+        "$ref": "#/entities/FeedbackSubmission"
+      },
+      "description": "Collection of anonymous feedback submissions."
+    }
+  }
+}

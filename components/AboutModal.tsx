@@ -1,5 +1,7 @@
 
 import React, { useState } from 'react';
+import { collection, addDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 interface AboutModalProps {
   isOpen: boolean;
@@ -23,10 +25,11 @@ const surveyPart2Questions = [
     { id: 'tlx5', text: 'Level of frustration experienced:', options: ['None', 'Low', 'Moderate', 'High', 'Extreme'] },
 ];
 
-
 const AboutModal = ({ isOpen, onClose }: AboutModalProps) => {
   const [step, setStep] = useState<SurveyStep>('intro');
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -34,12 +37,24 @@ const AboutModal = ({ isOpen, onClose }: AboutModalProps) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real application, you would send this data to a server/backend service.
-    // For example, using fetch() to post to a Google Cloud Function that updates a Google Sheet.
-    console.log("Survey submitted:", formData);
-    setStep('thanks');
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      await addDoc(collection(db, 'feedback'), {
+        ...formData,
+        timestamp: Date.now()
+      });
+      console.log("Survey submitted successfully");
+      setStep('thanks');
+    } catch (error: any) {
+      console.error("Error submitting survey:", error);
+      setSubmitError("There was an error submitting your feedback. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderIntro = () => (
@@ -136,9 +151,14 @@ const AboutModal = ({ isOpen, onClose }: AboutModalProps) => {
              <textarea id="q_harder" name="q_harder" rows={3} onChange={handleInputChange} className="w-full text-sm p-2 border border-gray-300 rounded-md resize-y focus:outline-none focus:ring-2 focus:ring-gray-800"/>
            </div>
         </div>
-        <div className="flex justify-end gap-3 mt-8">
-          <button type="button" onClick={() => setStep('prompt')} className="text-gray-600 hover:text-gray-900">Back</button>
-          <button type="submit" className="px-5 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700">Submit Feedback</button>
+        <div className="flex flex-col items-end gap-3 mt-8">
+          {submitError && <p className="text-red-500 text-sm">{submitError}</p>}
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setStep('prompt')} className="text-gray-600 hover:text-gray-900" disabled={isSubmitting}>Back</button>
+            <button type="submit" disabled={isSubmitting} className="px-5 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 flex items-center gap-2">
+              {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+            </button>
+          </div>
         </div>
     </form>
   );

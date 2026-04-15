@@ -1,0 +1,68 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: feedback
+    // Document ID: auto-generated
+    // Fields:
+    //   - timestamp: number (required) - The time the feedback was submitted
+    //   - q1: string (optional)
+    //   - q2: string (optional)
+    //   - q3: string (optional)
+    //   - q4: string (optional)
+    //   - q5: string (optional)
+    //   - q6: string (optional, max 2000 chars)
+    //   - q7: string (optional, max 2000 chars)
+    //   - q8: string (optional, max 2000 chars)
+    //   - tlx1: string (optional)
+    //   - tlx2: string (optional)
+    //   - tlx3: string (optional)
+    //   - tlx4: string (optional)
+    //   - tlx5: string (optional)
+    //   - q_harder: string (optional, max 2000 chars)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Validate optional string (if present, must be string and within length)
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+
+    function isValidFeedback(data) {
+      return data.keys().hasOnly(['timestamp', 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'tlx1', 'tlx2', 'tlx3', 'tlx4', 'tlx5', 'q_harder']) &&
+             data.timestamp is number &&
+             isValidOptionalString('q1', 0, 50) &&
+             isValidOptionalString('q2', 0, 50) &&
+             isValidOptionalString('q3', 0, 50) &&
+             isValidOptionalString('q4', 0, 50) &&
+             isValidOptionalString('q5', 0, 50) &&
+             isValidOptionalString('q6', 0, 2000) &&
+             isValidOptionalString('q7', 0, 2000) &&
+             isValidOptionalString('q8', 0, 2000) &&
+             isValidOptionalString('tlx1', 0, 50) &&
+             isValidOptionalString('tlx2', 0, 50) &&
+             isValidOptionalString('tlx3', 0, 50) &&
+             isValidOptionalString('tlx4', 0, 50) &&
+             isValidOptionalString('tlx5', 0, 50) &&
+             isValidOptionalString('q_harder', 0, 2000);
+    }
+
+    match /feedback/{feedbackId} {
+      // Allow anyone to create feedback (anonymous submission)
+      allow create: if isValidFeedback(request.resource.data);
+      // No read, update, or delete access to prevent data exposure or tampering
+      allow read, update, delete: if false;
+    }
+  }
+}
