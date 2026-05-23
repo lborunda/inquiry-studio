@@ -35,7 +35,7 @@ const ProjectsModal: React.FC<ProjectsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-md max-h-[80vh] flex flex-col relative text-gray-800">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-800 text-2xl font-bold">&times;</button>
         <h2 className="text-xl font-bold mb-4 text-gray-900">Projects</h2>

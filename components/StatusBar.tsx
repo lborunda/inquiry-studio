@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { Network, Users, BookMarked } from 'lucide-react';
+import { Network, Users, BookMarked, Image as ImageIcon } from 'lucide-react';
 
 interface StatusBarProps {
   practiceResearchRatio: number;
   setPracticeResearchRatio: (val: number) => void;
   wordCount: number;
   mapCount: number;
+  visualsCount: number;
   researchersCount: number;
   referencesCount: number;
   onOpenMap: () => void;
+  onOpenVisuals: () => void;
   onOpenResearchers: () => void;
   onOpenReferences: () => void;
 }
@@ -18,9 +20,11 @@ export default function StatusBar({
   setPracticeResearchRatio,
   wordCount,
   mapCount,
+  visualsCount,
   researchersCount,
   referencesCount,
   onOpenMap,
+  onOpenVisuals,
   onOpenResearchers,
   onOpenReferences
 }: StatusBarProps) {
@@ -71,7 +75,7 @@ export default function StatusBar({
   };
 
   return (
-    <div className="h-[36px] bg-gray-50 border-t border-gray-200 text-[12px] text-gray-700 px-4 flex items-center justify-between shrink-0 overflow-x-auto" role="contentinfo">
+    <div className="h-[36px] bg-gray-50 border-t border-gray-200 text-[12px] text-gray-700 px-4 flex items-center justify-between shrink-0 overflow-x-auto relative z-50" role="contentinfo">
       
       {/* LEFT: Practice-Research orientation slider */}
       <div className="flex items-center gap-3 relative mr-4" onMouseLeave={() => setShowPopover(false)}>
@@ -135,7 +139,7 @@ export default function StatusBar({
         {wordCount} w
       </div>
 
-      {/* RIGHT: 3 KB chips */}
+      {/* RIGHT: 4 KB chips */}
       <div className="flex flex-row gap-2 ml-auto shrink-0">
         <button 
           onClick={onOpenMap}
@@ -146,6 +150,17 @@ export default function StatusBar({
           <span className="hidden md:inline font-medium">Map</span>
           <span className="hidden md:inline text-gray-300">&middot;</span>
           <span className={mapCount === 0 ? "text-gray-400" : "text-gray-400 group-hover:text-gray-500"}>{mapCount}</span>
+        </button>
+
+        <button 
+          onClick={onOpenVisuals}
+          aria-label="Visuals"
+          className={`group flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors hover:bg-gray-100 ${visualsCount === 0 ? 'text-gray-400 hover:text-gray-600' : 'text-gray-600'}`}
+        >
+          <ImageIcon className="w-3.5 h-3.5" />
+          <span className="hidden md:inline font-medium">Visuals</span>
+          <span className="hidden md:inline text-gray-300">&middot;</span>
+          <span className={visualsCount === 0 ? "text-gray-400" : "text-gray-400 group-hover:text-gray-500"}>{visualsCount}</span>
         </button>
 
         <button 

@@ -14,7 +14,7 @@ import TutorialModal from './components/TutorialModal';
 import ProjectsModal from './components/ProjectsModal';
 import TopLeftTextStrip from './components/TopLeftTextStrip';
 import { WandIcon, ReferenceIcon, SendIcon, InfoIcon, ChevronLeftIcon, ChevronRightIcon, BookmarkIcon, ChevronDownIcon, LayoutHorizontalIcon, LayoutVerticalIcon, MapIcon, ImageIcon, FormatIcon, UsersIcon } from './components/icons';
-import { Menu, Sparkles, Network, History, ChevronRight } from 'lucide-react';
+import { Menu, Sparkles, Network, History, ChevronRight, Bold, Italic, Underline } from 'lucide-react';
 
 import CommandPalette from './components/CommandPalette';
 import InquiryTrail from './components/InquiryTrail';
@@ -118,6 +118,7 @@ const App = () => {
   const [isSocialModalOpen, setIsSocialModalOpen] = useState(false);
   const [isImageGalleryOpen, setIsImageGalleryOpen] = useState(false);
   const [isFormattingToolbarOpen, setIsFormattingToolbarOpen] = useState(false);
+  const [isStageSelectorOpen, setIsStageSelectorOpen] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
   const [isInquiryTrailModalOpen, setIsInquiryTrailModalOpen] = useState(false); // keep for old logic if not wiped yet
@@ -231,9 +232,37 @@ const App = () => {
     }
   }, [projects, activeProjectId]);
 
+  const lastScrolledProjectId = useRef<string | null>(null);
+
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeProject?.chatHistory]);
+    if (!activeProject) return;
+    
+    // Auto scroll to bottom instantly on complete refresh or project switch
+    if (lastScrolledProjectId.current !== activeProject.id) {
+      setTimeout(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        lastScrolledProjectId.current = activeProject.id;
+      }, 100);
+      return;
+    }
+
+    // Only scroll smoothly if the newly added message was from the user
+    // This allows the user to scroll through a model's long answer without being yanked down
+    const history = activeProject.chatHistory || [];
+    if (history.length > 0) {
+      const lastMsg = history[history.length - 1];
+      if (lastMsg.role === 'user') {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }, [activeProject?.chatHistory, activeProject?.id]);
+
+  useEffect(() => {
+    // When a request starts, ensure the loading indicator is visible
+    if (isLoading) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [isLoading]);
 
   // Fetch contextual RAG files when references modal is opened or section changes
   useEffect(() => {
@@ -901,13 +930,28 @@ const App = () => {
           generateVisualizationImage(plainText, 'research_argument')
         ]);
         
-        const modelMsg: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: response };
-        updateActiveProject({ chatHistory: [...activeProject.chatHistory, userMsg, modelMsg] });
+        const modelMsg: ChatMessage = { 
+          id: `model-${Date.now()}`, 
+          role: 'model', 
+          content: response,
+          image: image || undefined
+        };
         
+        const newFiles = [...(activeProject.studentFiles || [])];
         if (image) {
-          setVisualizationImage(image);
-          setIsVisualizationImageOpen(true);
+          const imageFile: UploadedFile = {
+            id: `img-${Date.now()}`,
+            name: `Visual Analysis - Research Argument.png`,
+            type: 'image',
+            dataUrl: image
+          };
+          newFiles.push(imageFile);
         }
+
+        updateActiveProject({ 
+          chatHistory: [...activeProject.chatHistory, userMsg, modelMsg],
+          studentFiles: newFiles
+        });
       } catch (error: any) {
         console.error("Error generating visual analysis:", error);
         const errorMsg: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: `I encountered an error while generating the visual analysis (${error.message || String(error)}). Please try again.`, isError: true };
@@ -925,13 +969,28 @@ const App = () => {
           generateVisualizationImage(plainText, 'semantic_map')
         ]);
         
-        const modelMsg: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: response };
-        updateActiveProject({ chatHistory: [...activeProject.chatHistory, userMsg, modelMsg] });
-        
+        const modelMsg: ChatMessage = { 
+          id: `model-${Date.now()}`, 
+          role: 'model', 
+          content: response,
+          image: image || undefined
+        };
+
+        const newFiles = [...(activeProject.studentFiles || [])];
         if (image) {
-          setVisualizationImage(image);
-          setIsVisualizationImageOpen(true);
+          const imageFile: UploadedFile = {
+            id: `img-${Date.now()}`,
+            name: `Visual Analysis - Semantic Map.png`,
+            type: 'image',
+            dataUrl: image
+          };
+          newFiles.push(imageFile);
         }
+
+        updateActiveProject({ 
+          chatHistory: [...activeProject.chatHistory, userMsg, modelMsg],
+          studentFiles: newFiles
+        });
       } catch (error: any) {
         console.error("Error generating visual analysis:", error);
         const errorMsg: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: `I encountered an error while generating the visual analysis (${error.message || String(error)}). Please try again.`, isError: true };
@@ -1159,11 +1218,62 @@ const App = () => {
                    stage={activeStage} 
                    saveStatus="idle"
                    onProjectClick={() => setIsCmdKOpen(true)}
-                   onStageClick={() => setIsCmdKOpen(true)}
+                   onStageClick={() => setIsStageSelectorOpen(!isStageSelectorOpen)}
                />
+               {isStageSelectorOpen && (
+                 <div className="absolute top-10 left-12 w-[320px] bg-white border border-gray-200 rounded-lg shadow-xl z-50 p-6 animate-in fade-in zoom-in-95 duration-200">
+                   <h3 className="text-sm font-semibold text-gray-800 mb-6 text-center">Research Inquiry Cycle</h3>
+                   
+                   <div className="relative h-[140px] w-full flex items-center justify-center">
+                     <svg className="absolute inset-0 w-full h-[140px] text-gray-200 pointer-events-none" style={{ zIndex: 0 }}>
+                         <line x1="50%" y1="15%" x2="15%" y2="85%" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" />
+                         <line x1="50%" y1="15%" x2="85%" y2="85%" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" />
+                         <line x1="15%" y1="85%" x2="85%" y2="85%" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" />
+                     </svg>
+                     
+                     <button 
+                        onClick={() => { handleStageChange(InquiryStage.LITERATURE_REVIEW); setIsStageSelectorOpen(false); }}
+                        className={`absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 transition-transform hover:scale-105 z-10`}
+                     >
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shadow-sm font-bold text-sm ${activeStage === InquiryStage.LITERATURE_REVIEW ? 'bg-blue-600 text-white ring-4 ring-blue-100' : 'bg-white text-gray-600 border border-gray-200'}`}>
+                          1
+                        </div>
+                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${activeStage === InquiryStage.LITERATURE_REVIEW ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'}`}>Lit Review</span>
+                     </button>
+                     
+                     <button 
+                        onClick={() => { handleStageChange(InquiryStage.RESEARCH_DESIGN); setIsStageSelectorOpen(false); }}
+                        className={`absolute bottom-0 left-2 flex flex-col items-center gap-1.5 transition-transform hover:scale-105 z-10`}
+                     >
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shadow-sm font-bold text-sm ${activeStage === InquiryStage.RESEARCH_DESIGN ? 'bg-blue-600 text-white ring-4 ring-blue-100' : 'bg-white text-gray-600 border border-gray-200'}`}>
+                          2
+                        </div>
+                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${activeStage === InquiryStage.RESEARCH_DESIGN ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'}`}>Methods</span>
+                     </button>
+                     
+                     <button 
+                        onClick={() => { handleStageChange(InquiryStage.COMMUNICATING_WRITING); setIsStageSelectorOpen(false); }}
+                        className={`absolute bottom-0 right-2 flex flex-col items-center gap-1.5 transition-transform hover:scale-105 z-10`}
+                     >
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shadow-sm font-bold text-sm ${activeStage === InquiryStage.COMMUNICATING_WRITING ? 'bg-blue-600 text-white ring-4 ring-blue-100' : 'bg-white text-gray-600 border border-gray-200'}`}>
+                          3
+                        </div>
+                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${activeStage === InquiryStage.COMMUNICATING_WRITING ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'}`}>Writing</span>
+                     </button>
+                   </div>
+                 </div>
+               )}
              </div>
 
             <div className="absolute top-4 right-6 z-20 flex items-center gap-2">
+              <button 
+                onClick={() => setIsFormattingToolbarOpen(!isFormattingToolbarOpen)}
+                className={`flex items-center gap-2 px-3.5 py-2 text-sm text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors shadow-sm ${isFormattingToolbarOpen ? 'bg-gray-100 ring-2 ring-gray-200' : ''}`}
+                title="Formatting Toolbar"
+              >
+                <FormatIcon className="w-4 h-4" />
+                <span className="hidden lg:inline">Format</span>
+              </button>
               <button 
                 onClick={handleTutorReview}
                 className="flex items-center gap-2 px-3.5 py-2 text-sm text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors shadow-sm"
@@ -1271,7 +1381,40 @@ const App = () => {
               </div>
             </div>
              
-            <div className="flex-1 p-8 md:p-12 md:pt-20 min-h-0 relative flex flex-col">
+             <div className="flex-1 p-8 md:p-12 md:pt-20 min-h-0 relative flex flex-col">
+               {isFormattingToolbarOpen && (
+                 <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 flex items-center gap-1 p-1 bg-white border border-gray-200 rounded-md shadow-sm">
+                    <button 
+                       onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold', false); if(writingAreaRef.current) { updateActiveProject({ writingText: writingAreaRef.current.innerHTML }); } }}
+                       className="p-1.5 hover:bg-gray-100 rounded text-gray-700 font-bold w-8 h-8 flex items-center justify-center"
+                       title="Bold"
+                    >
+                      B
+                    </button>
+                    <button 
+                       onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic', false); if(writingAreaRef.current) { updateActiveProject({ writingText: writingAreaRef.current.innerHTML }); } }}
+                       className="p-1.5 hover:bg-gray-100 rounded text-gray-700 italic font-serif w-8 h-8 flex items-center justify-center"
+                       title="Italic"
+                    >
+                      I
+                    </button>
+                    <button 
+                       onMouseDown={(e) => { e.preventDefault(); document.execCommand('underline', false); if(writingAreaRef.current) { updateActiveProject({ writingText: writingAreaRef.current.innerHTML }); } }}
+                       className="p-1.5 hover:bg-gray-100 rounded text-gray-700 underline w-8 h-8 flex items-center justify-center"
+                       title="Underline"
+                    >
+                      U
+                    </button>
+                    <div className="w-px h-5 bg-gray-300 mx-1"></div>
+                    <button 
+                       onMouseDown={(e) => { e.preventDefault(); setIsImageGalleryOpen(true); }}
+                       className="p-1.5 hover:bg-gray-100 rounded text-gray-700 w-8 h-8 flex items-center justify-center"
+                       title="Insert Image"
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                    </button>
+                 </div>
+               )}
                {isWritingAreaEmpty && (
                 <div className="absolute top-8 md:top-12 left-8 md:left-12 text-gray-400 text-base font-spacemono whitespace-pre-wrap pointer-events-none" aria-hidden="true">
                   {onboardingPlaceholder}
@@ -1318,6 +1461,17 @@ const App = () => {
                       <div className={`relative max-w-md lg:max-w-lg rounded-lg px-4 py-2 text-sm whitespace-pre-wrap break-words ${msg.role === 'user' ? 'bg-gray-800 text-white' : msg.isError ? 'bg-red-50 border border-red-200 text-red-800' : 'bg-white border'}`}>
                           {msg.role === 'model' ? (
                             <div onMouseUp={(e) => handleChatTextSelection(e, msg.content)}>
+                              {msg.image && (
+                                <img
+                                  src={msg.image}
+                                  alt="Visualization"
+                                  className="max-w-full h-auto mt-2 mb-3 rounded shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
+                                  onClick={() => {
+                                    setVisualizationImage(msg.image!);
+                                    setIsVisualizationImageOpen(true);
+                                  }}
+                                />
+                              )}
                               {renderFormattedMessage(msg.content, msg.critiqueId)}
                             </div>
                           ) : (
@@ -1477,9 +1631,11 @@ const App = () => {
         setPracticeResearchRatio={setPracticeResearchRatio}
         wordCount={activeProject ? stripHtml(activeProject.writingText).trim().split(/\s+/).filter(w => w.length > 0).length : 0}
         mapCount={activeProject?.conceptMapNodes?.length || 0}
+        visualsCount={activeProject?.studentFiles?.filter(f => f.type === 'image')?.length || 0}
         researchersCount={contextualRagFiles.length /* Currently this app doesn't have a specific array of Researchers except maybe some other state, but context says users added. I'll need to count the right things... wait, looking at rag_manifest.csv */ /* I'll leave as 0 and refine shortly */}
         referencesCount={(activeProject?.studentFiles?.length || 0) + contextualRagFiles.length}
         onOpenMap={() => setIsMapModalOpen(true)}
+        onOpenVisuals={() => setIsImageGalleryOpen(true)}
         onOpenResearchers={() => setIsSocialModalOpen(true)}
         onOpenReferences={() => setIsReferencesModalOpen(true)}
       />

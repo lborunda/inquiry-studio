@@ -29,7 +29,7 @@ const ImageGallery = ({ isOpen, onClose, files, onInsertReference }: ImageGaller
     return (
         <>
             <div 
-                className={`fixed inset-y-0 right-0 z-40 w-80 bg-white/80 backdrop-blur-md shadow-2xl transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'} border-l border-gray-200 flex flex-col`}
+                className={`fixed inset-y-0 right-0 z-[100] w-80 bg-white/80 backdrop-blur-md shadow-2xl transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'} border-l border-gray-200 flex flex-col`}
                 aria-modal="true"
                 role="dialog"
             >
@@ -70,13 +70,13 @@ const ImageGallery = ({ isOpen, onClose, files, onInsertReference }: ImageGaller
             </div>
             
             <div 
-              className={`fixed inset-0 bg-black/50 z-30 transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              className={`fixed inset-0 bg-black/50 z-[90] transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
               onClick={onClose}
             ></div>
 
             {selectedImage && (
                 <div 
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+                    className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
                     onClick={() => setSelectedImage(null)}
                 >
                     <img src={selectedImage} alt="Selected" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />

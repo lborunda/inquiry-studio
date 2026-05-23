@@ -15,7 +15,7 @@ export const generateVisualizationImage = async (text: string, type: 'research_a
 
   try {
     const apiKey = process.env.GEMINI_API_KEY || '';
-    const endpoint = `/api-proxy/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const endpoint = `/api-proxy/v1beta/models/nano-banana-pro-preview:generateContent?key=${apiKey}`;
     const body = {
       contents: [
         {

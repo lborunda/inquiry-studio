@@ -32,7 +32,7 @@ const InquiryTrailModal: React.FC<InquiryTrailModalProps> = ({ isOpen, onClose, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50 p-4">
       <div className="bg-white rounded-lg shadow-2xl w-full max-w-5xl h-[85vh] flex overflow-hidden">
         {/* Left Sidebar - Timeline */}
         <div className="w-1/3 border-r border-gray-200 bg-gray-50 flex flex-col h-full">

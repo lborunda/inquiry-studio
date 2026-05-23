@@ -18,6 +18,7 @@ export interface ChatMessage {
   content: string;
   bookmarked?: boolean;
   isError?: boolean;
+  image?: string;
   critiqueId?: string;
   isRefusal?: boolean;
   refusalReason?: string;
